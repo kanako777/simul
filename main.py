@@ -1,311 +1,268 @@
 import random
 import time
-from math import *
-import itertools
+from copy import deepcopy
+import matplotlib.pyplot as plt
+from scipy.interpolate import interp1d
 
-num_bus = 100
-num_rsu = 10
-num_uav = 20
-num_path = 50
-num_passenger = 1
-map_size = 1000
-min_height = 100
-max_height = 150
-poi_radius = 50
-rsu_distance = 50
-time_interval = 1
-simul_time = 1
+import numpy as np
+from config import *
+from utils import *
+from UAV import UAV
+from Bus import Bus
+import scienceplots
 
-uav_energy = 100
-uav_cpu = 100
-bus_cpu = 500
-rsu_cpu = 100
-budget = 500
-bandwidth = 10e6
+import argparse
 
-changed = 1
+# POI 위치 설정
+X, Y, Z = 500, 500, 0
+RANDOM_TASK = [{'name': "low", 'min': 5, 'max': 10}, {'name': "medium", 'min': 10, 'max': 20},
+               {'name': "large", 'min': 20, 'max': 50}]
+SCHEME = ["Game", "Matching", "Offloading", "Local"]
+SIMUL_NAME = ["Bus Num", "UAV Num", "Budget", "Scheme", "CPU required"]
+SAVE_X_NAME = ["Bus", "UAV", "Budget", "Scheme", "CPU required"]
+SAVE_Y_NAME = ["overhead", "UAV_utility", "bus_utility", "bus_num", "price"]
 
-def Extract(lst):
-    return [item[0] for item in lst]
-
-def dbm_to_watt(dbm):
-    """Convert dBm to Watt"""
-    return 10 ** (dbm / 10) / 1000
-
-def watt_to_dbm(watt):
-    return 10 * math.log10(1000 * watt)
-
-class Bus:
-    def __init__(self, id, path):
-        self.id = id
-        self.location = [0, 0]
-        self.x = self.location[0]
-        self.y = self.location[1]
-        self.passengers = []
-        self.status = "STOPPED"
-        self.path = path
-        self.path_index = 0
-        self.closest = []
-        self.uav_list = []
-        self.preference_list = []
-        self.cpu = round(bus_cpu * random.random(), 0)
-        self.price = round(random.uniform(1, 10), 0)  # 자신의 여유분 cpu에 대한 cost 부여
-
-    def move(self):
-        if self.location == self.path[self.path_index]:
-            self.path_index += 1
-            if self.path_index == len(self.path):
-                self.path_index = 0
-        self.location = self.path[self.path_index]
-
-        self.x = self.location[0]
-        self.y = self.location[1]
-        # print(f"Bus {self.id} moved to {self.location}")
-
-    def sell_cpu(self, cpu_amount, uav_id):
-        # cpu_amount만큼의 cpu를 UAV에게 판매
-        #if uav_id in self.uav_list.index()
-        global changed
-
-        list = Extract(self.uav_list)
-
-        if uav_id in list:
-            index = list.index(uav_id)
-            for i in range(index):
-                if self.uav_list[i][3] == None:
-                    return 0;
-
-            if self.cpu >= cpu_amount:
-                self.uav_list[index][3] = True
-                self.cpu = round(self.cpu - cpu_amount, 0)
-
-                changed = 1
-
-                return cpu_amount * self.price
-
-            else:
-                return 0;
-        return 0;
-
-    def pick_up(self, passengers):
-        for p in passengers:
-            self.passengers.append(p)
-        # print(f"Bus {self.id} picked up {len(passengers)} passengers")
-        self.status = "RUNNING"
-
-    def drop_off(self):
-        num_passengerengers = len(self.passengers)
-        self.passengers = []
-        # print(f"Bus {self.id} dropped off {num_passengerengers} passengers")
-
-    def sort_by_distance(self, uavs):
-        self.closest = sorted(uavs,
-                              key=lambda uav: ((self.x - uav.x) ** 2 + (self.y - uav.y) ** 2 + (uav.z) ** 2) ** 0.5)
+NUM_OBJECT = [NUM_BUS, NUM_UAV, BUDGET, len(SCHEME), len(RANDOM_TASK)]
+NUM_STEP = [NUM_BUS_STEP, NUM_UAV_STEP, NUM_BUDGET_STEP, len(SCHEME), len(RANDOM_TASK)]
+STEP = [BUS_STEP, UAV_STEP, BUDGET_STEP, 1, 1]
+X_LABEL = ["Number of buses", "Number of UAVs", "Budget", "Scheme", "CPU required"]
+Y_LABEL = ["UAV overhead", "UAV utility", "Bus utility", "Avg. # of offloaded buses per UAV", "CPU price"]
+LEGEND_LABEL = ["Bus=", "UAV=", "Budget=", "", ""]
 
 
-    def run(self):
-        self.status = "RUNNING"
-        while True:
-            self.move()
-            time.sleep(time_interval)  # 5초 간격으로 운행
-
-class RSU:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-        self.closest = []
-        self.preference_list = []
-        self.cpu = rsu_cpu
-
-    def distance(self, other):
-        return ((self.x - other.x) ** 2 + (self.y - other.y) ** 2) ** 0.5
+def simul_value(type, i):
+    if type == 0:
+        return NUM_BUS - i * BUS_STEP
+    elif type == 1:
+        return NUM_UAV - i * UAV_STEP
+    elif type == 2:
+        return BUDGET - i * BUDGET_STEP
+    elif type == 3:
+        return SCHEME[i]
+    elif type == 4:
+        return RANDOM_TASK[i]
+    return -1
 
 
-class UAV:
-    def __init__(self, id, x, y, z):
-        self.id = id
-        self.x = x
-        self.y = y
-        self.z = z
-        self.closest = []
-        self.bus_list = []
-        self.preference_list = []
-        self.task = [random.randint(1, 100), random.randint(1, 100), random.randint(1, 10)]
-        self.cpu = round(uav_cpu * random.random(), 0)
-        self.energy = uav_energy
-        self.budget = budget
-        self.buy_cpu = 0  # 구매한 cpu 양 초기화
-        self.bus_list = []  # 구매할 버스 리스트 초기화
-        self.purchase_bus_list = []  # 구매할 버스 리스트 초기화
-
-        angle = random.uniform(0, 2 * pi)
-        distance = random.uniform(0, poi_radius)
-        x_offset = distance * cos(angle)
-        y_offset = distance * sin(angle)
-        z_offset = random.uniform(min_height, max_height)
-        self.x = int(self.x + x_offset)
-        self.y = int(self.y + y_offset)
-        self.z = int(min(max(self.z + z_offset, min_height), max_height))
-
-    def __str__(self):
-        return f"UAV at ({self.x}, {self.y}, {self.z})"
-
-    def sort_by_distance(self, buses):
-        self.closest = sorted(buses, key=lambda bus: ((self.x - bus.x) ** 2 + (self.y - bus.y) ** 2 + (self.z) ** 2) ** 0.5)
-
-    def purchase_cpu(self, range_list, bus_list):
-
-        cost = 0
-        buses_sorted = sorted(bus_list, key=lambda bus: bus.price)
-
-        for bus in buses_sorted:
-
-            if bus.id in (range_list):
-                max_cpu = round(min(self.budget // bus.price, bus.cpu),2)  # budget 내에서 최대한 많은 cpu 구매
-                if max_cpu > 0:
-                    cost = round(bus.sell_cpu(max_cpu, self.id),2)
-                    if cost > 0:
-                        self.buy_cpu += max_cpu
-                        self.budget = round((self.budget -cost), 2)
-                        self.purchase_bus_list.append(bus.id)
-
-        return cost
-
-class Passenger:
-    def __init__(self, id):
-        self.id = id
-        self.source = [random.randint(0, map_size), random.randint(0, map_size)]
-        self.destination = [random.randint(0, map_size), random.randint(0, map_size)]
-        print(f"Passenger {self.id}: source={self.source}, destination={self.destination}")
-
-
-def calc_sinr_uav_bus(P_tx, lambda_c, d, L, N, B):
-    # 송신안테나에서의 송신전력
-    P_tx_ant = 10 ** (P_tx / 10) * 1e-3
-
-    # 수신안테나에서의 수신강도
-    P_rx_ant = P_tx_ant * (lambda_c / (4 * pi * d)) ** 2 * 10 ** (-L / 10)
-
-    # 총 잡음 (dBm)
-    N_total = 10 ** (N / 10) * B
-
-    # SINR 계산
-    sinr = 10 * log10(P_rx_ant / N_total)
-
-    return sinr
+def mean_without_outliers(lst: list, decision):
+    lst.sort()
+    l = len(lst)
+    l_min = int(l * 0.1)
+    l_max = int(l * 0.9)
+    # lst = lst[l_min:l_max]
+    return round(Average(lst), decision)
 
 
 if __name__ == "__main__":
+    # parsing / default = UAV-Bus task
+    parser = argparse.ArgumentParser(description="_")
+    parser.add_argument("--x", type=int, default=1, help="x value in graph. range 0~3")
+    parser.add_argument("--y", type=int, default=0, help="label in graph, range 0~3")
+    parser.add_argument("--real", type=bool, default=0, help="flag for using real data")
+    args = parser.parse_args()
 
+    print("### SIMULATION START ###")
     paths = []
+    simul_time = 0
+    num_bus = NUM_BUS
+    num_x_step = NUM_STEP[args.x]
+    num_y_step = NUM_STEP[args.y]
+
+    if args.real:
+        if args.x == 0:
+            num_x_step = 1
+        if args.y == 0:
+            num_y_step = 1
+        simul_time = 3
+
+        with open("./buspos.txt", "r") as fp:
+            t = 0
+            while t < simul_time:
+                path = []
+                line = fp.readline()
+                poslst = line.split('/')[:-1]
+                for pos in poslst:
+                    x, y = np.array(pos.split(','), dtype=np.float32)
+                    path.append((x, y))
+                paths.append(path)
+                t += 1
+
+        paths = np.array(paths).transpose((1, 0, 2))
+        num_bus = len(paths)
+    else:
+        # make environment
+        simul_time = SIMUL_TIME
+        for i in range(num_bus):
+            path = [(random.randint(0, MAP_SIZE), random.randint(0, MAP_SIZE))]
+            while len(path) < NUM_PATH:
+                x, y = path[-1]
+                next_x = random.randint(max(0, x - random.randint(1, 50)), min(MAP_SIZE, x + random.randint(1, 50)))
+                next_y = random.randint(max(0, y - random.randint(1, 50)), min(MAP_SIZE, y + random.randint(1, 50)))
+                if math.dist((x, y), (next_x, next_y)) >= 50:
+                    path.append((next_x, next_y))
+            paths.append(path)
+
+    buses_original = []
     for i in range(num_bus):
-        path = [(random.randint(0, map_size), random.randint(0, map_size))]
-        while len(path) < num_path:
-            x, y = path[-1]
+        buses_original.append(Bus(i, 0, paths[i]))
 
-            next_x = random.randint(max(0, x - random.randint(1, 50)), min(map_size, x + random.randint(1, 50)))
-            next_y = random.randint(max(0, y - random.randint(1, 50)), min(map_size, y + random.randint(1, 50)))
+    # POI로부터 일정거리 이내에 위치하도록 UAV 생성
+    uavs_original = []
+    for i in range(NUM_UAV):
+        uavs_original.append(UAV(i, X, Y, Z))
 
-            if dist((x, y), (next_x, next_y)) >= 50:
-                path.append((next_x, next_y))
-        paths.append(path)
-    
-    buses = []
-    for i in range(num_bus):
-        bus = Bus(i, paths[i])
-        buses.append(bus)
+    # for graph
+    uav_bus_avg_overhead = [[0 for _ in range(num_x_step)] for _ in range(num_y_step)]
+    uav_avg_utility = [[0 for _ in range(num_x_step)] for _ in range(num_y_step)]
+    bus_avg_utility = [[0 for _ in range(num_x_step)] for _ in range(num_y_step)]
+    uav_avg_bus_num = [[0 for _ in range(num_x_step)] for _ in range(num_y_step)]
+    bus_avg_price = [[0 for _ in range(num_x_step)] for _ in range(num_y_step)]
 
-    rsus = []
-    while len(rsus) < num_rsu:
-        x, y = int(random.uniform(0, map_size)), int(random.uniform(0, map_size))
-        new_rsu = RSU(x, y)
+    buses = deepcopy(buses_original)
+    uavs = deepcopy(uavs_original)
+    scheme = SCHEME[0]
+    budget = BUDGET
+    task_range = {'min': TASK_CPU_CYCLE, 'max': TASK_CPU_CYCLE}
+    # UAV 대수 - 버스의 대수를 점점 줄여나가면서 시뮬레이션
+    for i in range(num_y_step):
+        if args.y == 3:
+            scheme = SCHEME[i]
+        elif args.y == 4:
+            task_range = RANDOM_TASK[i]
 
-        if all(new_rsu.distance(existing_rsu) >= rsu_distance for existing_rsu in rsus):
-            rsus.append(new_rsu)
+        if args.x == 0:
+            buses = deepcopy(buses_original)
+        elif args.x == 1:
+            uavs = deepcopy(uavs_original)
+        elif args.x == 2:
+            budget = BUDGET
+        elif args.x == 3:
+            pass
 
-    x,y,z = int(random.uniform(0, map_size)), int(random.uniform(0, map_size)), 0
+        for j in range(num_x_step):
+            print(
+                f"### {SIMUL_NAME[args.y]}:{simul_value(args.y, i)} {SIMUL_NAME[args.x]}:{simul_value(args.x, j)} simulation start")
 
-    uavs = []
-    for i in range(num_uav):
-        new_uav = UAV(i, x,y,z)
-        uavs.append(new_uav)
+            # simulate
+            simulation(simul_time, uavs, buses, scheme=scheme, budget=budget, random_task_range=task_range)
+            print("### SIMULATION RESULT ###")
 
-    passengers = []
-    for i in range(num_passenger):
-        passengers.append(Passenger(i))
+            tmp_overhead = []
+            tmp_uav_utility = []
+            tmp_bus_utility = []
+            tmp_bus_num = []
+            tmp_bus_avg_price = []
 
-    for i in range(simul_time):
-
-        for bus in buses:
-            if bus.status == "STOPPED":
-                nearby_passengers = [p for p in passengers if abs(p.source[0] - bus.x) <= 50 and abs(
-                    p.source[1] - bus.y) <= 50]
-                if len(nearby_passengers) > 0:
-                    bus.pick_up(nearby_passengers)
-                    bus.status = "RUNNING"
-                else:
-                    bus.move()
-
-            elif bus.status == "RUNNING":
-                nearby_passengers = [p for p in bus.passengers if abs(p.destination[0] - bus.x) <= 50 and abs(
-                    p.destination[1] - bus.y) <= 50]
-                if len(nearby_passengers) > 0:
-                    bus.drop_off()
-                    bus.pick_up(nearby_passengers)
-                    bus.status = "STOPPED"
-                else:
-                    bus.move()
-            else:
-                bus.move()
-
-        for uav, bus in itertools.product(uavs, buses):
-            distance = int (((uav.x - bus.x) ** 2 + (uav.y - bus.y) ** 2 + (uav.z) ** 2) ** 0.5)
-
-            # freq_m = (3 * 10**8) / (2 * 10**9)
-            # sinr = dbm_to_watt(calc_sinr_uav_bus(30, 2*(10**9), distance, 0, -114, 10e6))
-
-            # sinr = dbm_to_watt(30) * ((distance) ** (-3.4)) / dbm_to_watt(-114)
-            sinr = dbm_to_watt(20 - (131 + 42.8 * log10(distance/1000)) + 114)
-            transmission_rate = round(bandwidth * log2(1 + sinr) / 1024 / 1024, 2)
-
-            transmission_delay = round(uav.task[1] / transmission_rate, 2)
-
-            bus_list = [bus.id, bus.cpu, bus.price]
-            uav_list = [uav.id, transmission_delay, transmission_rate, None]
-
-
-            if distance <= 250 and transmission_rate > 1:
-                uav.bus_list.append(bus_list)
-                bus.uav_list.append(uav_list)
-
-        # 버스가 자신의 여유분 cpu에 대한 cost를 부여하는 단계
-        for bus in buses:
-            bus.uav_list.sort(key=lambda x: x[1])
-            print(f"BUS(ID={bus.id}) CPU: {bus.cpu} price : {bus.price} at ({bus.x}, {bus.y}) has the following closest uavs: {bus.uav_list}")
-
-        # UAV가 버스로부터 cpu를 구매하는 단계
-        while(changed):
-
-            changed = 0
+            under = 0
+            upper = 0
 
             for uav in uavs:
-                uav.bus_list.sort(key=lambda x: x[1], reverse=True)
+                print(uav.overhead_list)
+                if len(uav.overhead_list) > 0:
+                    avg_overhead = mean_without_outliers(uav.overhead_list, 4)
+                    tmp_overhead.append(avg_overhead)
+                if len(uav.utility_list) > 0:
+                    avg_utility = mean_without_outliers(uav.utility_list, 4)
+                    tmp_uav_utility.append(avg_utility)
+                if len(uav.bus_num_list) > 0:
+                    avg_bus_num = mean_without_outliers(uav.bus_num_list, 4)
+                    tmp_bus_num.append(avg_bus_num)
+                if len(uav.price_list) > 0:
+                    avg_price = round(Average(uav.price_list), 4)
+                    tmp_bus_avg_price.append(avg_price)
 
-                if uav.bus_list:
+                print(
+                    f"UAV(ID={uav.id}) has overhead")  # : {avg_overhead}, utility : {avg_utility}, price : {avg_price}")
 
-                    list = Extract(uav.bus_list)
-                    cost = uav.purchase_cpu(list, buses)
-                    if cost :
-                        print(f"UAV {uav.id}, budget {uav.budget} purchased {uav.buy_cpu} cpu from bus {uav.purchase_bus_list}")
+            for bus in buses:
+                if len(bus.utility_list) > 0:
+                    avg_utility = mean_without_outliers(bus.utility_list, 4)
+                    # print(bus.price_list)
+                    tmp_bus_utility.append(avg_utility)
+                print(f"BUS(ID={bus.id}) has utility ")  #: {avg_utility}")
 
+            uav_bus_avg_overhead[i][j] = round(Average(tmp_overhead), 4)  # mean_without_outliers(tmp_overhead,4)
+            uav_avg_utility[i][j] = round(Average(tmp_uav_utility), 4)  # mean_without_outliers(tmp_uav_utility,4)
+            uav_avg_bus_num[i][j] = round(Average(tmp_bus_num), 4)  # mean_without_outliers(tmp_bus_num,4)
+            bus_avg_utility[i][j] = round(Average(tmp_bus_utility), 4)  # mean_without_outliers(tmp_bus_utility,4)
+            bus_avg_price[i][j] = round(Average(tmp_bus_avg_price), 4)
 
-        # 버스와 UAV의 매칭리스트 초기화
-        for uav in uavs:
-            uav.bus_list = []
+            # print(f"UAV overhead : {AVE}, Under : {under}, Upper : {upper}")
+            if args.x == 0:
+                for k in range(BUS_STEP):
+                    del buses[-1]
+            elif args.x == 1:
+                for k in range(UAV_STEP):
+                    del uavs[-1]
+            elif args.x == 2:
+                budget -= BUDGET_STEP
+            elif args.x == 3:
+                scheme = SCHEME[j]
+            elif args.x == 4:
+                task_range = RANDOM_TASK[j]
 
-        for bus in buses:
-            bus.uav_list = []
-        # 버스와 UAV의 매칭리스트 초기화
+        if args.y == 0:
+            for k in range(BUS_STEP):
+                del buses[-1]
+        elif args.y == 1:
+            for k in range(UAV_STEP):
+                del uavs[-1]
+        elif args.y == 2:
+            budget -= BUDGET_STEP
 
+    # print result
 
-        time.sleep(time_interval)
+    x_idx = np.arange(0, num_x_step)
+    x = NUM_OBJECT[args.x] - x_idx * STEP[args.x]
+    legend_value_idx = np.arange(0, num_y_step)
+    legend_value = []
+    for i in legend_value_idx:
+        v = NUM_OBJECT[args.y] - i * STEP[args.y]
+        if args.y == 3:
+            v = SCHEME[NUM_OBJECT[args.y] - v]
+        elif args.y == 4:
+            v = RANDOM_TASK[NUM_OBJECT[args.y] - v]['name']
+        legend_value.append(v)
+    data = [uav_bus_avg_overhead, uav_avg_utility, bus_avg_utility, uav_avg_bus_num, bus_avg_price]
+
+    plt.style.use(['science', 'ieee', 'no-latex'])
+
+    for i in range(5):
+        for j in range(len(legend_value)):
+            cubic_interpolation_model = interp1d(x, data[i][j], kind="cubic")
+            X_ = np.linspace(x.min(), x.max(), 500)
+            Y_ = cubic_interpolation_model(X_)
+            plt.plot(X_, Y_, label=LEGEND_LABEL[args.y] + str(legend_value[j]))
+
+            # plt.plot(x, data[i][j], label=LEGEND_LABEL[args.y] + str(legend_value[j]))
+
+        plt.xlabel(X_LABEL[args.x])
+        plt.ylabel(Y_LABEL[i])
+        plt.legend(loc='upper right')
+        plt.legend(frameon=True)
+        plt.savefig("./test_graphs/" + SAVE_X_NAME[args.x] + "_" + SAVE_X_NAME[args.y] + "_" + SAVE_Y_NAME[i])
+        plt.clf()
+
+    cubic_interpolation_model0 = interp1d(x, data[0][0], kind="cubic")
+    cubic_interpolation_model1 = interp1d(x, data[1][0], kind="cubic")
+    cubic_interpolation_model2 = interp1d(x, data[2][0], kind="cubic")
+
+    # Plotting the Graph
+    X_ = np.linspace(x.min(), x.max(), 500)
+    Y_0 = cubic_interpolation_model0(X_)
+    Y_1 = cubic_interpolation_model1(X_)
+    Y_2 = cubic_interpolation_model2(X_)
+
+    plt.plot(X_, Y_0, label="UAV overhead")
+    plt.plot(X_, Y_1, label="UAV utility")
+    plt.plot(X_, Y_2, label="Bus utility")
+
+    # plt.plot(x, data[0][0], label="UAV overhead")
+    # plt.plot(x, data[1][0], label="UAV utility")
+    # plt.plot(x, data[2][0], label="Bus utility")
+
+    plt.xlabel(X_LABEL[args.x])
+    plt.ylabel("overhead,utility")
+    plt.legend(loc='upper right')
+    plt.legend(frameon=True)
+    plt.savefig("./test_graphs/" + SAVE_X_NAME[args.x] + "_" + SAVE_X_NAME[args.y] + "_" + "overutil")
