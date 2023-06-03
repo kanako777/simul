@@ -44,8 +44,8 @@ def has_empty(uavs: list[UAV.UAV]):
     return False
 
 
-def simulation(simul_time, uavs: list[UAV.UAV], buses: list[Bus.Bus], scheme="Game", budget=BUDGET,
-               random_task_range={'min': 1, 'max': 1}):
+def simulation(simul_time, uavs: list[UAV.UAV], buses: list[Bus.Bus], scheme="Proposal", budget=BUDGET,
+               random_task_range={'min': 1, 'max': 1}, sigma=ALPHA):
     # 시뮬레이션 메인 함수
     # 주어진 simul_time 동안 반복해서 수행
     # 매 반복시마다 아래의 단계를 수행
@@ -84,6 +84,7 @@ def simulation(simul_time, uavs: list[UAV.UAV], buses: list[Bus.Bus], scheme="Ga
         # UAV, 버스 초기화 & 이동
         for uav in uavs:
             uav.init(task_cpu_cycle, task_data_size, task_delay, budget=budget)
+
 
         for bus in buses:
             bus.init()
@@ -179,7 +180,7 @@ def simulation(simul_time, uavs: list[UAV.UAV], buses: list[Bus.Bus], scheme="Ga
             if iter_count > MAX_ITER_COUNT:
                 iteration = 0
 
-        if scheme == "Game" or scheme == "Offloading":  # Computing Offloading Scheme based on Stackelberg Game
+        if scheme == "Proposal" or scheme == "Offloading":  # Computing Offloading Scheme based on Stackelberg Game
             # UAV가 버스로부터 실제로 cpu를 구매하는 단계
             # 앞선 버스가 price를 결정하는 부분과 일정부분 동일
             # 더이상 버스로부터 CPU를 구매하는 UAV가 없을 때까지 반복
@@ -203,7 +204,7 @@ def simulation(simul_time, uavs: list[UAV.UAV], buses: list[Bus.Bus], scheme="Ga
                             if buses[uav_id].cpu > 0 and uav.purchase_cpu(buses[uav_id],
                                                                           transmission_rate_list[uav.id][uav_id],
                                                                           price_sum, price_num,
-                                                                          True if scheme == "Game" else False):
+                                                                          True if scheme == "Proposal" else False):
                                 changed = 1
         elif scheme == "Matching" and not has_empty(uavs):  # Matching Scheme
             # matching preprocess
@@ -251,5 +252,5 @@ def simulation(simul_time, uavs: list[UAV.UAV], buses: list[Bus.Bus], scheme="Ga
             bus.result_update()
         # UAV의 overhead와 utility를 계산 & 리스트에 추가
         for uav in uavs:
-            uav.result_update()
+            uav.result_update(sigma)
             uav.price_result_update(buses)

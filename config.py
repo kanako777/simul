@@ -1,6 +1,6 @@
 NUM_BUS = 50  # 운행하는 버스의 대수(버스별로 자기 노선(path)을 가짐
 NUM_RSU = 10  # 설치된 RSU의 개수
-NUM_UAV = 20  # UAV의 개수
+NUM_UAV = 10  # UAV의 개수
 NUM_PATH = 200  # 버스 운행경로별로 지나는 정류장(지점)의 개수
 NUM_PASSENGER = 1 # 사용안함
 BUDGET = 50 # UAV의 최대 BUDGET (이 BUDGET을 이용하여 버스나 RSU로부터 CPU를 구매)
@@ -17,7 +17,7 @@ SIMUL_TIME = 200 # 시뮬레이션을 반복하는 횟수(t)
 
 BUS_STEP = 10        # 버스의 숫자 변화량
 NUM_BUS_STEP = 4   # 버스의 숫자를 변화시키는 횟수(X축)
-UAV_STEP = 4        # UAV 숫자 변화량
+UAV_STEP = 2        # UAV 숫자 변화량
 NUM_UAV_STEP = 4    # UAV의 숫자를 변화시키는 횟수
 BUDGET_STEP = 10    # budget 변화량
 NUM_BUDGET_STEP = 4 # budget 변화 횟수

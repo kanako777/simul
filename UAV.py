@@ -55,12 +55,13 @@ class UAV:
         self.bus_num_list = []
         self.price_list = []
 
-    def result_update(self):
+    def result_update(self, sigma):
         self.T_local = self.task['cpu_cycle'] / self.cpu
         self.E_local = self.T_local * UAV_COMPUTING_UNIT_ENERGY * self.cpu ** 3
-        # self.overhead = alpha * max(self.T_LOCAL, self.T_local+self.T_transmission+self.T_offload) / self.task[2] + (1-alpha) * (self.E_transmission + self.E_local) / self.E_LOCAL
-        self.overhead = ALPHA * ((self.T_local + self.T_transmission + self.T_offload) / self.T_LOCAL) + (1 - ALPHA) * (
-                    self.E_transmission + self.E_local) / self.E_LOCAL
+
+        #self.overhead = ALPHA * ((self.T_local + self.T_transmission + self.T_offload) / self.T_LOCAL) + (1 - ALPHA) * (self.E_transmission + self.E_local) / self.E_LOCAL
+        self.overhead = sigma * ((self.T_local + self.T_transmission + self.T_offload) / self.T_LOCAL) + (1 - sigma) * (self.E_transmission + self.E_local) / self.E_LOCAL
+
         self.overhead_list.append(self.overhead)
         self.utility_list.append(self.utility)
         self.bus_num_list.append(self.bus_num)

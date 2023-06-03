@@ -17,15 +17,16 @@ import argparse
 X, Y, Z = 500, 500, 0
 RANDOM_TASK = [{'name': "low", 'min': 5, 'max': 10}, {'name': "medium", 'min': 10, 'max': 20},
                {'name': "large", 'min': 20, 'max': 50}]
-SCHEME = ["Game", "Matching", "Offloading", "Local"]
-SIMUL_NAME = ["Bus Num", "UAV Num", "Budget", "Scheme", "CPU required"]
-SAVE_X_NAME = ["Bus", "UAV", "Budget", "Scheme", "CPU required"]
+SCHEME = ["Proposal", "Matching", "Offloading", "Local"]
+SIGMA = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+SIMUL_NAME = ["Bus Num", "UAV Num", "Budget", "Scheme", "CPU required", "Sigma"]
+SAVE_X_NAME = ["Bus", "UAV", "Budget", "Scheme", "CPU required", "Sigma"]
 SAVE_Y_NAME = ["overhead", "UAV_utility", "bus_utility", "bus_num", "price"]
 
-NUM_OBJECT = [NUM_BUS, NUM_UAV, BUDGET, len(SCHEME), len(RANDOM_TASK)]
-NUM_STEP = [NUM_BUS_STEP, NUM_UAV_STEP, NUM_BUDGET_STEP, len(SCHEME), len(RANDOM_TASK)]
-STEP = [BUS_STEP, UAV_STEP, BUDGET_STEP, 1, 1]
-X_LABEL = ["Number of buses", "Number of UAVs", "Budget", "Scheme", "CPU required"]
+NUM_OBJECT = [NUM_BUS, NUM_UAV, BUDGET, len(SCHEME), len(RANDOM_TASK), 1]
+NUM_STEP = [NUM_BUS_STEP, NUM_UAV_STEP, NUM_BUDGET_STEP, len(SCHEME), len(RANDOM_TASK), len(SIGMA)]
+STEP = [BUS_STEP, UAV_STEP, BUDGET_STEP, 1, 1, 0.1]
+X_LABEL = ["Number of buses", "Number of UAVs", "Budget", "Scheme", "CPU required", "Sigma"]
 Y_LABEL = ["UAV overhead", "UAV utility", "Bus utility", "Avg. # of offloaded buses per UAV", "CPU price"]
 LEGEND_LABEL = ["Bus=", "UAV=", "Budget=", "", ""]
 
@@ -41,6 +42,8 @@ def simul_value(type, i):
         return SCHEME[i]
     elif type == 4:
         return RANDOM_TASK[i]
+    elif type == 5:
+        return SIGMA[i]
     return -1
 
 
@@ -56,7 +59,7 @@ def mean_without_outliers(lst: list, decision):
 if __name__ == "__main__":
     # parsing / default = UAV-Bus task
     parser = argparse.ArgumentParser(description="_")
-    parser.add_argument("--x", type=int, default=1, help="x value in graph. range 0~3")
+    parser.add_argument("--x", type=int, default=2, help="x value in graph. range 0~3")
     parser.add_argument("--y", type=int, default=0, help="label in graph, range 0~3")
     parser.add_argument("--real", type=bool, default=0, help="flag for using real data")
     args = parser.parse_args()
@@ -122,6 +125,7 @@ if __name__ == "__main__":
     uavs = deepcopy(uavs_original)
     scheme = SCHEME[0]
     budget = BUDGET
+    sigma = ALPHA
     task_range = {'min': TASK_CPU_CYCLE, 'max': TASK_CPU_CYCLE}
     # UAV 대수 - 버스의 대수를 점점 줄여나가면서 시뮬레이션
     for i in range(num_y_step):
@@ -129,6 +133,8 @@ if __name__ == "__main__":
             scheme = SCHEME[i]
         elif args.y == 4:
             task_range = RANDOM_TASK[i]
+        elif args.y == 5:
+            sigma = SIGMA[i]
 
         if args.x == 0:
             buses = deepcopy(buses_original)
@@ -144,7 +150,7 @@ if __name__ == "__main__":
                 f"### {SIMUL_NAME[args.y]}:{simul_value(args.y, i)} {SIMUL_NAME[args.x]}:{simul_value(args.x, j)} simulation start")
 
             # simulate
-            simulation(simul_time, uavs, buses, scheme=scheme, budget=budget, random_task_range=task_range)
+            simulation(simul_time, uavs, buses, scheme=scheme, budget=budget, random_task_range=task_range, sigma=sigma)
             print("### SIMULATION RESULT ###")
 
             tmp_overhead = []
@@ -200,6 +206,8 @@ if __name__ == "__main__":
                 scheme = SCHEME[j]
             elif args.x == 4:
                 task_range = RANDOM_TASK[j]
+            elif args.x == 5:
+                sigma = SIGMA[j]
 
         if args.y == 0:
             for k in range(BUS_STEP):
@@ -225,6 +233,7 @@ if __name__ == "__main__":
         legend_value.append(v)
     data = [uav_bus_avg_overhead, uav_avg_utility, bus_avg_utility, uav_avg_bus_num, bus_avg_price]
 
+    marker = itertools.cycle(('+', '2', '.', 'x'))
     plt.style.use(['science', 'ieee', 'no-latex'])
 
     for i in range(5):
@@ -232,9 +241,9 @@ if __name__ == "__main__":
             cubic_interpolation_model = interp1d(x, data[i][j], kind="cubic")
             X_ = np.linspace(x.min(), x.max(), 500)
             Y_ = cubic_interpolation_model(X_)
-            plt.plot(X_, Y_, label=LEGEND_LABEL[args.y] + str(legend_value[j]))
+            #plt.plot(X_, Y_, label=LEGEND_LABEL[args.y] + str(legend_value[j]))
 
-            # plt.plot(x, data[i][j], label=LEGEND_LABEL[args.y] + str(legend_value[j]))
+            plt.plot(x, data[i][j], marker = next(marker), label=LEGEND_LABEL[args.y] + str(legend_value[j]))
 
         plt.xlabel(X_LABEL[args.x])
         plt.ylabel(Y_LABEL[i])
@@ -251,11 +260,11 @@ if __name__ == "__main__":
     X_ = np.linspace(x.min(), x.max(), 500)
     Y_0 = cubic_interpolation_model0(X_)
     Y_1 = cubic_interpolation_model1(X_)
-    Y_2 = cubic_interpolation_model2(X_)
+    #Y_2 = cubic_interpolation_model2(X_)
 
     plt.plot(X_, Y_0, label="UAV overhead")
     plt.plot(X_, Y_1, label="UAV utility")
-    plt.plot(X_, Y_2, label="Bus utility")
+    #plt.plot(X_, Y_2, label="Bus utility")
 
     # plt.plot(x, data[0][0], label="UAV overhead")
     # plt.plot(x, data[1][0], label="UAV utility")
