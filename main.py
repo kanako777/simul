@@ -13,22 +13,32 @@ import scienceplots
 
 import argparse
 
+import matplotlib.patches as patches
+import cmocean.cm as cmo
+import seaborn as sns
+
+
 # POI 위치 설정
-X, Y, Z = 500, 500, 0
+X, Y, Z = 450, 700, 0
+position = 0
+
 RANDOM_TASK = [{'name': "low", 'min': 5, 'max': 10}, {'name': "medium", 'min': 10, 'max': 20},
                {'name': "large", 'min': 20, 'max': 50}]
 SCHEME = ["Proposal", "Matching", "Offloading", "Local"]
-SIGMA = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-SIMUL_NAME = ["Bus Num", "UAV Num", "Budget", "Scheme", "CPU required", "Sigma"]
-SAVE_X_NAME = ["Bus", "UAV", "Budget", "Scheme", "CPU required", "Sigma"]
+#SIGMA = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+POSITION = [1,2,3,4,5,6,7,8,9]
+SIGMA = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0]
+#POSITION = [9, 8, 7, 6, 5, 4, 3, 2, 1]
+SIMUL_NAME = ["Bus Num", "UAV Num", "Budget", "Scheme", "CPU required", "Sigma", "Position"]
+SAVE_X_NAME = ["Bus", "UAV", "Budget", "Scheme", "CPU required", "Sigma", "Posision"]
 SAVE_Y_NAME = ["overhead", "UAV_utility", "bus_utility", "bus_num", "price"]
 
-NUM_OBJECT = [NUM_BUS, NUM_UAV, BUDGET, len(SCHEME), len(RANDOM_TASK), 1]
-NUM_STEP = [NUM_BUS_STEP, NUM_UAV_STEP, NUM_BUDGET_STEP, len(SCHEME), len(RANDOM_TASK), len(SIGMA)]
-STEP = [BUS_STEP, UAV_STEP, BUDGET_STEP, 1, 1, 0.1]
-X_LABEL = ["Number of buses", "Number of UAVs", "Budget", "Scheme", "CPU required", "Sigma"]
+NUM_OBJECT = [NUM_BUS, NUM_UAV, BUDGET, len(SCHEME), len(RANDOM_TASK), 1, 9]
+NUM_STEP = [NUM_BUS_STEP, NUM_UAV_STEP, NUM_BUDGET_STEP, len(SCHEME), len(RANDOM_TASK), len(SIGMA), len(POSITION)]
+STEP = [BUS_STEP, UAV_STEP, BUDGET_STEP, 1, 1, 0.1, 1]
+X_LABEL = ["Number of buses", "Number of UAVs", "Budget", "Scheme", "CPU required", "$\sigma$", "Position"]
 Y_LABEL = ["UAV overhead", "UAV utility", "Bus utility", "Avg. # of offloaded buses per UAV", "CPU price"]
-LEGEND_LABEL = ["Bus=", "UAV=", "Budget=", "", ""]
+LEGEND_LABEL = ["Bus=", "UAV=", "Budget=", "", "", "Sigma=", "Position="]
 
 
 def simul_value(type, i):
@@ -44,6 +54,8 @@ def simul_value(type, i):
         return RANDOM_TASK[i]
     elif type == 5:
         return SIGMA[i]
+    elif type == 6:
+        return POSITION[i]
     return -1
 
 
@@ -59,9 +71,10 @@ def mean_without_outliers(lst: list, decision):
 if __name__ == "__main__":
     # parsing / default = UAV-Bus task
     parser = argparse.ArgumentParser(description="_")
-    parser.add_argument("--x", type=int, default=2, help="x value in graph. range 0~3")
-    parser.add_argument("--y", type=int, default=0, help="label in graph, range 0~3")
-    parser.add_argument("--real", type=bool, default=0, help="flag for using real data")
+    parser.add_argument("--x", type=int, default=6, help="x value in graph. range 0~3")
+    parser.add_argument("--y", type=int, default=3, help="label in graph, range 0~3")
+    parser.add_argument("--real", type=bool, default=1, help="flag for using real data")
+    parser.add_argument("--map", type=bool, default=1, help="flag for draw map")
     args = parser.parse_args()
 
     print("### SIMULATION START ###")
@@ -76,7 +89,7 @@ if __name__ == "__main__":
             num_x_step = 1
         if args.y == 0:
             num_y_step = 1
-        simul_time = 3
+        simul_time = 10
 
         with open("./buspos.txt", "r") as fp:
             t = 0
@@ -87,10 +100,12 @@ if __name__ == "__main__":
                 for pos in poslst:
                     x, y = np.array(pos.split(','), dtype=np.float32)
                     path.append((x, y))
+
                 paths.append(path)
                 t += 1
 
         paths = np.array(paths).transpose((1, 0, 2))
+
         num_bus = len(paths)
     else:
         # make environment
@@ -109,10 +124,14 @@ if __name__ == "__main__":
     for i in range(num_bus):
         buses_original.append(Bus(i, 0, paths[i]))
 
+    if args.map:
+        draw_map(X,Y, buses_original)
+
     # POI로부터 일정거리 이내에 위치하도록 UAV 생성
+
     uavs_original = []
     for i in range(NUM_UAV):
-        uavs_original.append(UAV(i, X, Y, Z))
+        uavs_original.append(UAV(i, X, Y, Z, position))
 
     # for graph
     uav_bus_avg_overhead = [[0 for _ in range(num_x_step)] for _ in range(num_y_step)]
@@ -126,6 +145,7 @@ if __name__ == "__main__":
     scheme = SCHEME[0]
     budget = BUDGET
     sigma = ALPHA
+
     task_range = {'min': TASK_CPU_CYCLE, 'max': TASK_CPU_CYCLE}
     # UAV 대수 - 버스의 대수를 점점 줄여나가면서 시뮬레이션
     for i in range(num_y_step):
@@ -133,8 +153,7 @@ if __name__ == "__main__":
             scheme = SCHEME[i]
         elif args.y == 4:
             task_range = RANDOM_TASK[i]
-        elif args.y == 5:
-            sigma = SIGMA[i]
+
 
         if args.x == 0:
             buses = deepcopy(buses_original)
@@ -144,10 +163,19 @@ if __name__ == "__main__":
             budget = BUDGET
         elif args.x == 3:
             pass
+        elif args.x == 5:
+            sigma = SIGMA[i]
+
 
         for j in range(num_x_step):
-            print(
-                f"### {SIMUL_NAME[args.y]}:{simul_value(args.y, i)} {SIMUL_NAME[args.x]}:{simul_value(args.x, j)} simulation start")
+            print(f"### {SIMUL_NAME[args.y]}:{simul_value(args.y, i)} {SIMUL_NAME[args.x]}:{simul_value(args.x, j)} simulation start")
+
+            if args.x == 6:
+                position = POSITION[j]
+                print(position)
+                uavs = []
+                for k in range(NUM_UAV):
+                    uavs.append(UAV(k, X, Y, Z, position))
 
             # simulate
             simulation(simul_time, uavs, buses, scheme=scheme, budget=budget, random_task_range=task_range, sigma=sigma)
@@ -163,7 +191,7 @@ if __name__ == "__main__":
             upper = 0
 
             for uav in uavs:
-                print(uav.overhead_list)
+                #print(uav.overhead_list)
                 if len(uav.overhead_list) > 0:
                     avg_overhead = mean_without_outliers(uav.overhead_list, 4)
                     tmp_overhead.append(avg_overhead)
@@ -177,15 +205,14 @@ if __name__ == "__main__":
                     avg_price = round(Average(uav.price_list), 4)
                     tmp_bus_avg_price.append(avg_price)
 
-                print(
-                    f"UAV(ID={uav.id}) has overhead")  # : {avg_overhead}, utility : {avg_utility}, price : {avg_price}")
+                #print(f"UAV(ID={uav.id}) has overhead")  # : {avg_overhead}, utility : {avg_utility}, price : {avg_price}")
 
             for bus in buses:
                 if len(bus.utility_list) > 0:
                     avg_utility = mean_without_outliers(bus.utility_list, 4)
                     # print(bus.price_list)
                     tmp_bus_utility.append(avg_utility)
-                print(f"BUS(ID={bus.id}) has utility ")  #: {avg_utility}")
+                #print(f"BUS(ID={bus.id}) has utility ")  #: {avg_utility}")
 
             uav_bus_avg_overhead[i][j] = round(Average(tmp_overhead), 4)  # mean_without_outliers(tmp_overhead,4)
             uav_avg_utility[i][j] = round(Average(tmp_uav_utility), 4)  # mean_without_outliers(tmp_uav_utility,4)
@@ -208,6 +235,8 @@ if __name__ == "__main__":
                 task_range = RANDOM_TASK[j]
             elif args.x == 5:
                 sigma = SIGMA[j]
+            elif args.x == 6:
+                position = POSITION[j]
 
         if args.y == 0:
             for k in range(BUS_STEP):
@@ -233,7 +262,7 @@ if __name__ == "__main__":
         legend_value.append(v)
     data = [uav_bus_avg_overhead, uav_avg_utility, bus_avg_utility, uav_avg_bus_num, bus_avg_price]
 
-    marker = itertools.cycle(('+', '2', '.', 'x'))
+    marker = itertools.cycle(('+', '2', '.', 'x', '*'))
     plt.style.use(['science', 'ieee', 'no-latex'])
 
     for i in range(5):
@@ -242,15 +271,23 @@ if __name__ == "__main__":
             X_ = np.linspace(x.min(), x.max(), 500)
             Y_ = cubic_interpolation_model(X_)
             #plt.plot(X_, Y_, label=LEGEND_LABEL[args.y] + str(legend_value[j]))
+            #print(x, data[i][j])
 
-            plt.plot(x, data[i][j], marker = next(marker), label=LEGEND_LABEL[args.y] + str(legend_value[j]))
+            #plt.plot(x, data[i][j], marker = next(marker), label=LEGEND_LABEL[args.y] + str(legend_value[j]))
+            #plt.xticks(x)
+
+            if str(legend_value[j])=="Proposal":
+                plt.bar(x, data[i][j], label=LEGEND_LABEL[args.y] + str(legend_value[j]), color='b')
+                plt.xticks(x)
 
         plt.xlabel(X_LABEL[args.x])
         plt.ylabel(Y_LABEL[i])
-        plt.legend(loc='upper right')
-        plt.legend(frameon=True)
+        #plt.legend(loc='best')
+        #plt.legend(frameon=True)
         plt.savefig("./test_graphs/" + SAVE_X_NAME[args.x] + "_" + SAVE_X_NAME[args.y] + "_" + SAVE_Y_NAME[i])
         plt.clf()
+
+    marker = itertools.cycle(('+', '2', '.', 'x'))
 
     cubic_interpolation_model0 = interp1d(x, data[0][0], kind="cubic")
     cubic_interpolation_model1 = interp1d(x, data[1][0], kind="cubic")
@@ -260,18 +297,18 @@ if __name__ == "__main__":
     X_ = np.linspace(x.min(), x.max(), 500)
     Y_0 = cubic_interpolation_model0(X_)
     Y_1 = cubic_interpolation_model1(X_)
-    #Y_2 = cubic_interpolation_model2(X_)
+    Y_2 = cubic_interpolation_model2(X_)
 
-    plt.plot(X_, Y_0, label="UAV overhead")
-    plt.plot(X_, Y_1, label="UAV utility")
+    #plt.plot(X_, Y_0, label="UAV overhead")
+    #plt.plot(X_, Y_1, label="UAV utility")
     #plt.plot(X_, Y_2, label="Bus utility")
 
-    # plt.plot(x, data[0][0], label="UAV overhead")
-    # plt.plot(x, data[1][0], label="UAV utility")
-    # plt.plot(x, data[2][0], label="Bus utility")
+    plt.plot(x, data[0][0], marker = next(marker), label="UAV overhead")
+    plt.plot(x, data[1][0], marker = next(marker), label="UAV utility")
+    plt.plot(x, data[2][0], marker = next(marker), label="Bus utility")
 
     plt.xlabel(X_LABEL[args.x])
     plt.ylabel("overhead,utility")
-    plt.legend(loc='upper right')
+    plt.legend(loc='best')
     plt.legend(frameon=True)
     plt.savefig("./test_graphs/" + SAVE_X_NAME[args.x] + "_" + SAVE_X_NAME[args.y] + "_" + "overutil")

@@ -1,6 +1,11 @@
 import numpy as np
 import math
 import queue
+import matplotlib.pyplot as plt
+from scipy.interpolate import interp1d
+import matplotlib.patches as patches
+import cmocean.cm as cmo
+import seaborn as sns
 
 
 # 그래프 smoothing 함수
@@ -11,7 +16,10 @@ def smooth(y, box_pts):
 
 
 def Average(lst):
-    return sum(lst) / len(lst)
+    if len(lst) > 0:
+        return sum(lst) / len(lst)
+    else:
+        return 0
 
 
 def Extract(lst):
@@ -35,6 +43,7 @@ from copy import deepcopy
 MAX_ITER_COUNT = 1000
 EPSILON = 0.0001
 
+POSITION = [[3,2], [2,2], [1,2], [3,3], [2,3], [1, 3], [3,4], [2,4], [1,4]] # X=450, Y=700
 
 def has_empty(uavs: list[UAV.UAV]):
     for uav in uavs:
@@ -42,6 +51,61 @@ def has_empty(uavs: list[UAV.UAV]):
             print("Do local scheme !")
             return True
     return False
+
+def draw_map(X, Y, buses_original):
+    # 버스 경로를 파일로 프린트
+    fig, (ax1, ax2) = plt.subplots(ncols=2, figsize=(8, 4), gridspec_kw={"wspace": 0.0, "hspace": 0.0}, sharex=False, sharey=False, constrained_layout=True)
+
+    #filename = "map2.png"
+    #lonmin, lonmax, latmin, latmax = (0, 1000, 0, 1000)  # just example
+
+    filename = "map.png"
+    lonmin, lonmax, latmin, latmax = (-400,1400,-100,1100) # just example
+
+    image_extent = (lonmin, lonmax, latmin, latmax)
+
+    ax1.imshow(plt.imread(filename), extent=image_extent)
+    ax2.imshow(plt.imread(filename), extent=image_extent)
+    #rect = patches.Rectangle((0, 0), 1000, 1000, linewidth=0.5, edgecolor='g', facecolor='none')
+    #ax1.add_patch(rect)
+
+    x = []
+    y = []
+    for bus in buses_original:
+        for i in range(len(bus.path)):
+            tx, ty = bus.path[i]
+            x.append(tx)
+            y.append(ty)
+
+    ax1.scatter(x, y, s=100, alpha=0.5)
+    #ax1.scatter(X, Y, s=150, marker="X", color='r', alpha=1)
+    ax1.set_ylim((-100, 1100))
+    ax1.set_xlim((-100, 1100))
+
+    sns.kdeplot(x=x, y=y, cmap=plt.cm.GnBu, fill=True, levels=30, ax=ax2)
+    ax2.scatter(X, Y, s=150, marker="X", color='r', alpha=1)
+    ax2.set_ylim((-100, 1100))
+    ax2.set_xlim((-100, 1100))
+
+    num = [0, 1, 2, 3, 4]
+    for i in num:
+        for j in num:
+            #test = patches.Rectangle((j * 200, i * 200), 200, 200, linewidth=0.5, edgecolor='g', facecolor='none', linestyle=':')
+            #ax1.add_patch(test)
+            pass
+
+    for i in num:
+        for j in num:
+            test = patches.Rectangle((j * 200, i * 200), 200, 200, linewidth=0.5, edgecolor='g', facecolor='none', linestyle=':')
+            ax2.add_patch(test)
+
+    for i in range(len(POSITION)):
+        x, y = POSITION[i]
+        ax2.text(x * 200 + 10, y*200+160, "P{}".format(9-i), dict(size=15))
+
+    #plt.savefig("./test_graphs/map")
+    #plt.clf()
+    plt.show()
 
 
 def simulation(simul_time, uavs: list[UAV.UAV], buses: list[Bus.Bus], scheme="Proposal", budget=BUDGET,
@@ -254,3 +318,4 @@ def simulation(simul_time, uavs: list[UAV.UAV], buses: list[Bus.Bus], scheme="Pr
         for uav in uavs:
             uav.result_update(sigma)
             uav.price_result_update(buses)
+

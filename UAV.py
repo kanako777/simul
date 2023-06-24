@@ -4,16 +4,32 @@ import math
 from Bus import Bus
 
 
+#POSITION = [[1,3], [2,3], [3,3], [1,2], [2,2], [3, 2], [1,1], [2,1], [3,1]] # X=500, Y=500
+POSITION = [[3,2], [2,2], [1,2], [3,3], [2,3], [1, 3], [3,4], [2,4], [1,4]] # X=450, Y=700
+
 class UAV:
-    def __init__(self, id, x, y, z):
+    def __init__(self, id, x, y, z, position):
         self.id = id
 
         # init position
-        angle = random.uniform(0, 2 * math.pi)
-        distance = random.uniform(0, POI_RADIUS)
-        self.x = int(x + distance * math.cos(angle))
-        self.y = int(y + distance * math.sin(angle))
-        self.z = int(z + random.uniform(MIN_HEIGHT, MAX_HEIGHT))
+        if position == 0:
+            angle = random.uniform(0, 2 * math.pi)
+            distance = random.uniform(0, POI_RADIUS)
+            self.x = int(x + distance * math.cos(angle))
+            self.y = int(y + distance * math.sin(angle))
+            self.z = int(z + random.uniform(MIN_HEIGHT, MAX_HEIGHT))
+        elif position > 0:
+
+            position_x, position_y = POSITION[position-1]
+            #self.x = random.randint(200 * position_x, 200 * (position_x + 1))
+            #self.y = random.randint(200 * position_y, 200 * (position_y + 1))
+            self.x = random.randint(200 * position_x, 200 * (position_x + 1))
+            self.y = random.randint(200 * position_y, 200 * (position_y + 1))
+            self.z = int(z + random.uniform(MIN_HEIGHT, MAX_HEIGHT))
+            print("position = ", position)
+            print("position_x = ", position_x, "position_y =", position_y)
+            print(self.x, self.y, self.z)
+
 
         # init task
         self.cpu = float(UAV_CPU_CYCLE)
@@ -141,4 +157,4 @@ class UAV:
             print("ERROR something is wrong in calculating max_cpu !!!")
 
     def __str__(self):
-        return f"UAV at ({self.x}, {self.y}, {self.z})"
+        return f"UAV at ({self.x}, {self.y}, {self.z}"
