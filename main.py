@@ -3,6 +3,7 @@ import time
 from copy import deepcopy
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
+import matplotlib.font_manager
 
 import numpy as np
 from config import *
@@ -71,10 +72,10 @@ def mean_without_outliers(lst: list, decision):
 if __name__ == "__main__":
     # parsing / default = UAV-Bus task
     parser = argparse.ArgumentParser(description="_")
-    parser.add_argument("--x", type=int, default=6, help="x value in graph. range 0~3")
-    parser.add_argument("--y", type=int, default=3, help="label in graph, range 0~3")
-    parser.add_argument("--real", type=bool, default=1, help="flag for using real data")
-    parser.add_argument("--map", type=bool, default=1, help="flag for draw map")
+    parser.add_argument("--x", type=int, default=5, help="x value in graph, Bus Num=0, UAV Num=1, Budget=2, Scheme=3, CPU=4, Sigma=5, Position=6")
+    parser.add_argument("--y", type=int, default=3, help="legend in graph, Bus Num=0, UAV Num=1, Budget=2, Scheme=3, CPU=4, Sigma=5, Position=6")
+    parser.add_argument("--real", type=bool, default=0, help="flag for using real data")
+    parser.add_argument("--map", type=bool, default=0, help="flag for draw map")
     args = parser.parse_args()
 
     print("### SIMULATION START ###")
@@ -172,7 +173,7 @@ if __name__ == "__main__":
 
             if args.x == 6:
                 position = POSITION[j]
-                print(position)
+                #print(position)
                 uavs = []
                 for k in range(NUM_UAV):
                     uavs.append(UAV(k, X, Y, Z, position))
@@ -266,49 +267,45 @@ if __name__ == "__main__":
     plt.style.use(['science', 'ieee', 'no-latex'])
 
     for i in range(5):
-        for j in range(len(legend_value)):
-            cubic_interpolation_model = interp1d(x, data[i][j], kind="cubic")
-            X_ = np.linspace(x.min(), x.max(), 500)
-            Y_ = cubic_interpolation_model(X_)
-            #plt.plot(X_, Y_, label=LEGEND_LABEL[args.y] + str(legend_value[j]))
-            #print(x, data[i][j])
 
-            #plt.plot(x, data[i][j], marker = next(marker), label=LEGEND_LABEL[args.y] + str(legend_value[j]))
+        data2 = []
+
+        for j in range(len(legend_value)):
+
+            if args.x != 6:
+                plt.plot(x, data[i][j], marker = next(marker), label=LEGEND_LABEL[args.y] + str(legend_value[j]))
+                plt.xticks(x)
+
+            #if str(legend_value[j])=="Proposal":
+            #plt.bar(x, data[i][j], label=LEGEND_LABEL[args.y] + str(legend_value[j]))
             #plt.xticks(x)
 
-            if str(legend_value[j])=="Proposal":
-                plt.bar(x, data[i][j], label=LEGEND_LABEL[args.y] + str(legend_value[j]), color='b')
+            data2.append(data[i][j])
+
+        if args.x == 6:
+            width = 0.15  # the width of the bars
+            multiplier = 0
+            for k in range(len(data2)):
+                offset = width * multiplier
+                rects = plt.bar(x + offset, data2[k], width, label=LEGEND_LABEL[args.y] + str(legend_value[k]))
+                multiplier += 1
                 plt.xticks(x)
 
         plt.xlabel(X_LABEL[args.x])
         plt.ylabel(Y_LABEL[i])
-        #plt.legend(loc='best')
-        #plt.legend(frameon=True)
+        plt.legend(loc='best')
+        plt.legend(frameon=True)
         plt.savefig("./test_graphs/" + SAVE_X_NAME[args.x] + "_" + SAVE_X_NAME[args.y] + "_" + SAVE_Y_NAME[i])
         plt.clf()
 
-    marker = itertools.cycle(('+', '2', '.', 'x'))
-
-    cubic_interpolation_model0 = interp1d(x, data[0][0], kind="cubic")
-    cubic_interpolation_model1 = interp1d(x, data[1][0], kind="cubic")
-    cubic_interpolation_model2 = interp1d(x, data[2][0], kind="cubic")
-
-    # Plotting the Graph
-    X_ = np.linspace(x.min(), x.max(), 500)
-    Y_0 = cubic_interpolation_model0(X_)
-    Y_1 = cubic_interpolation_model1(X_)
-    Y_2 = cubic_interpolation_model2(X_)
-
-    #plt.plot(X_, Y_0, label="UAV overhead")
-    #plt.plot(X_, Y_1, label="UAV utility")
-    #plt.plot(X_, Y_2, label="Bus utility")
-
-    plt.plot(x, data[0][0], marker = next(marker), label="UAV overhead")
-    plt.plot(x, data[1][0], marker = next(marker), label="UAV utility")
-    plt.plot(x, data[2][0], marker = next(marker), label="Bus utility")
-
-    plt.xlabel(X_LABEL[args.x])
-    plt.ylabel("overhead,utility")
-    plt.legend(loc='best')
-    plt.legend(frameon=True)
-    plt.savefig("./test_graphs/" + SAVE_X_NAME[args.x] + "_" + SAVE_X_NAME[args.y] + "_" + "overutil")
+    # marker = itertools.cycle(('+', '2', '.', 'x'))
+    #
+    # plt.plot(x, data[0][0], marker = next(marker), label="UAV overhead")
+    # plt.plot(x, data[1][0], marker = next(marker), label="UAV utility")
+    # plt.plot(x, data[2][0], marker = next(marker), label="Bus utility")
+    #
+    # plt.xlabel(X_LABEL[args.x])
+    # plt.ylabel("overhead,utility")
+    # plt.legend(loc='best')
+    # plt.legend(frameon=True)
+    # plt.savefig("./test_graphs/" + SAVE_X_NAME[args.x] + "_" + SAVE_X_NAME[args.y] + "_" + "overutil")

@@ -59,8 +59,8 @@ def draw_map(X, Y, buses_original):
     #filename = "map2.png"
     #lonmin, lonmax, latmin, latmax = (0, 1000, 0, 1000)  # just example
 
-    filename = "map.png"
-    lonmin, lonmax, latmin, latmax = (-400,1400,-100,1100) # just example
+    filename = "map3.png"
+    lonmin, lonmax, latmin, latmax = (-400,1350,-100,1100) # just example
 
     image_extent = (lonmin, lonmax, latmin, latmax)
 
@@ -192,9 +192,9 @@ def simulation(simul_time, uavs: list[UAV.UAV], buses: list[Bus.Bus], scheme="Pr
                 price_num = 0
                 if uav.bus_id_list:  # UAV의 주변에 버스가 존재하면
                     # 게임이론을 적용하기 위한 값 계산
-                    for uav_id in uav.bus_id_list:
-                        price_sum += buses[uav_id].price
-                        if buses[uav_id].price > 0:
+                    for bus_id in uav.bus_id_list:
+                        price_sum += buses[bus_id].price
+                        if buses[bus_id].price > 0:
                             price_num += 1
                     for bus_id in uav.bus_id_list:
                         # 게임이론에 따라 UAV가 버스로부터 구입할 수 있는 최대의 CPU사이클 계산
@@ -257,16 +257,16 @@ def simulation(simul_time, uavs: list[UAV.UAV], buses: list[Bus.Bus], scheme="Pr
                     price_num = 0
                     uav.bus_id_list.sort(key=lambda x: buses[x].price, reverse=True)
                     if uav.bus_id_list:
-                        for uav_id in uav.bus_id_list:
-                            price_sum += buses[uav_id].price
-                            if buses[uav_id].price > 0:
+                        for bus_id in uav.bus_id_list:
+                            price_sum += buses[bus_id].price
+                            if buses[bus_id].price > 0:
                                 price_num += 1
                         tmp_list = deepcopy(uav.bus_id_list)
-                        for uav_id in tmp_list:
+                        for bus_id in tmp_list:
                             # UAV가 버스로부터 CPU를 구매
                             # CPU를 구매한 UAV가 존재한다면 반복
-                            if buses[uav_id].cpu > 0 and uav.purchase_cpu(buses[uav_id],
-                                                                          transmission_rate_list[uav.id][uav_id],
+                            if buses[bus_id].cpu > 0 and uav.purchase_cpu(buses[bus_id],
+                                                                          transmission_rate_list[uav.id][bus_id],
                                                                           price_sum, price_num,
                                                                           True if scheme == "Proposal" else False):
                                 changed = 1

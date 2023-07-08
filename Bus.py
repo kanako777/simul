@@ -15,7 +15,7 @@ class Bus:
         self.uav_id_list = []
         self.sell_uav_id_list = []
         self.cpu = BUS_CPU_CYCLE if self.type == 0 else RSU_CPU_CYCLE  # 남은 cpu
-        self.price = 1  # 자신의 여유분 cpu에 대한 cost 부여
+        self.price = 0.5  # 자신의 여유분 cpu에 대한 cost 부여
         self.old_price = 1
         self.utility = 0
 

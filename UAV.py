@@ -17,17 +17,16 @@ class UAV:
             distance = random.uniform(0, POI_RADIUS)
             self.x = int(x + distance * math.cos(angle))
             self.y = int(y + distance * math.sin(angle))
+            #self.x = random.randint(200, 400)
+            #self.y = random.randint(400, 600)
             self.z = int(z + random.uniform(MIN_HEIGHT, MAX_HEIGHT))
-        elif position > 0:
+            print(self.x, self.y, self.z)
 
+        elif position > 0:
             position_x, position_y = POSITION[position-1]
-            #self.x = random.randint(200 * position_x, 200 * (position_x + 1))
-            #self.y = random.randint(200 * position_y, 200 * (position_y + 1))
             self.x = random.randint(200 * position_x, 200 * (position_x + 1))
             self.y = random.randint(200 * position_y, 200 * (position_y + 1))
             self.z = int(z + random.uniform(MIN_HEIGHT, MAX_HEIGHT))
-            print("position = ", position)
-            print("position_x = ", position_x, "position_y =", position_y)
             print(self.x, self.y, self.z)
 
 
@@ -97,13 +96,25 @@ class UAV:
         max_cpu = float(min(((self.budget + price_sum) / (bus.price * price_num)) - 1, bus.cpu, self.budget / bus.price,
                             self.task['cpu_cycle']))  # Game theory cpu calculation
 
-        ratio = max_cpu / self.task_original['cpu_cycle']
-        T_trans = ratio * self.task_original['data_size'] / transmission_rate
-        T_off = max_cpu / bus.cpu
-        E_trans = T_trans * UAV_TRANSMISSION_UNIT_ENERGY
-        E_off = T_off * BUS_COMPUTING_UNIT_ENERGY * BUS_CPU_CYCLE ** 3
-        if is_compare and max_cpu / self.cpu < (T_trans + T_off):
-            return False
+        if max_cpu > 0 :
+            ratio = max_cpu / self.task_original['cpu_cycle']
+            #T_trans = ratio * self.task_original['data_size'] / transmission_rate
+            #T_off = max_cpu / bus.cpu
+            #E_trans = T_trans * UAV_TRANSMISSION_UNIT_ENERGY
+            #E_off = T_off * BUS_COMPUTING_UNIT_ENERGY * BUS_CPU_CYCLE ** 3
+
+            T_trans = self.task['data_size'] / transmission_rate
+            T_off = self.task['cpu_cycle'] / max_cpu
+            E_trans = T_trans * UAV_TRANSMISSION_UNIT_ENERGY
+            E_off = T_off * BUS_COMPUTING_UNIT_ENERGY * BUS_CPU_CYCLE ** 3
+
+            if is_compare :
+                T_local = self.task['cpu_cycle'] / self.cpu
+                E_local = T_local * UAV_COMPUTING_UNIT_ENERGY * self.cpu ** 3
+                off_choice1 = T_local - (T_trans + T_off)
+                off_choice2 = E_local - (E_trans)
+                if off_choice1 < 0 :
+                    return False
 
         if max_cpu > 0:
             temp_t = self.time_consume + T_trans + T_off
@@ -112,7 +123,8 @@ class UAV:
                 # self.buy_price.append(bus.price)
                 self.bus_id_list.remove(bus.id)
 
-                self.time_consume = self.time_consume + temp_t
+                #self.time_consume = self.time_consume + temp_t
+                self.time_consume = temp_t
                 self.buy_cpu += max_cpu
                 self.budget = round(self.budget - cost, 2)
                 self.purchase_bus_id_list.append(bus.id)
@@ -131,6 +143,26 @@ class UAV:
                 return True
         return False
 
+    def purchase_cpu2(self, bus: Bus, transmission_rate, price_sum, price_num, is_compare=True):
+        max_cpu = float(min(((self.budget + price_sum) / (bus.price * price_num)) - 1, bus.cpu, self.budget / bus.price,
+                            self.task['cpu_cycle']))  # Game theory cpu calculation
+
+        if max_cpu > 0:
+
+            cost = bus.sell_cpu(max_cpu, self.id)
+            # self.buy_price.append(bus.price)
+            self.bus_id_list.remove(bus.id)
+
+            self.buy_cpu += max_cpu
+            self.budget = round(self.budget - cost, 2)
+
+            self.utility += math.log10(1 + max_cpu)  # alpha = 1, beta = 1
+            self.bus_num += 1
+
+            return True
+
+        return False
+
     def matching_bus(self, buses: list[Bus], transmission_rate_list):  # not used
         # minimum overhead matching
         self.overhead = 1e9
@@ -138,10 +170,10 @@ class UAV:
 
         # find minimum overhead
         for bus in buses:
-            if bus.cpu < self.task_original['cpu_cycle']:
+            if bus.cpu < self.task['cpu_cycle']:
                 continue
-            T_trans = self.task_original['data_size'] / transmission_rate_list[self.id][bus.id]
-            T_off = self.task_original['cpu_cycle'] / bus.cpu
+            T_trans = self.task['data_size'] / transmission_rate_list[self.id][bus.id]
+            T_off = self.task['cpu_cycle'] / bus.cpu
             E_trans = T_trans * UAV_TRANSMISSION_UNIT_ENERGY
             E_off = T_off * BUS_COMPUTING_UNIT_ENERGY * BUS_CPU_CYCLE ** 3
             tmp_overhead = ALPHA * ((T_trans + T_off) / self.T_LOCAL) + (1 - ALPHA) * (E_trans) / self.E_LOCAL
