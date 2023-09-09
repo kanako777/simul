@@ -1,31 +1,8 @@
 import numpy as np
 import cvxpy as cvx
+import time
 from cvxpy import *
 import math
-
-# Define the variable
-x = cvx.Variable(pos=True)
-y = cvx.Variable(pos=True)
-z = cvx.Variable(pos=True)
-
-cost = square(x + inv_pos(y))
-
-# Define the objective function
-objective = cvx.Minimize(z)
-
-# Define the constraints
-constraints = [z>=cost] + [0<=x, x<=1] + [0<=y, y<=1]
-
-# Formulate the problem
-problem = cvx.Problem(objective, constraints)
-
-# Solve the problem
-problem.solve(gp=False)
-
-# Print the results
-print("Optimal value of x:", x.value)
-print("Optimal value of y:", y.value)
-print("Optimal value of z:", z.value)
 
 
 class Task:
@@ -45,6 +22,7 @@ FB = 20
 omega1 = 1
 omega2 = 1
 epsilon_u = 1
+lamda = 0.2
 
 rho_um = cvx.Variable([M, U], pos=True)
 rho_bm = cvx.Variable([M, B], pos=True)
@@ -57,28 +35,21 @@ P_ub = np.ones((U, B)) * 1
 R_ub = np.ones((U, B)) * 1
 tou_rho_um = np.ones((M, U)) * 1
 tou_f_um = np.ones((M, U)) * 1
-sm = np.ones(M) * 10 # size of task m
-cm = np.ones(M) * 10 # cpu cycles required for task m
-dm = np.ones(M) * 10 # delay constraints for task m
+sm = np.ones(M) * 1 # size of task m
+cm = np.ones(M) * 5 # cpu cycles required for task m
+dm = np.ones(M) * 50 # delay constraints for task m
 
-rho_um_k = np.ones((M, U)) * 0.2
-rho_bm_k = np.ones((M, B)) * 0.2
-f_u_k = np.ones((M, U)) * 2.5
-f_b_k = np.ones((M, B)) * 5
+rho_um_k = np.ones((M, U)) * 1 / (U+B)
+rho_bm_k = np.ones((M, B)) * 1 / (U+B)
+f_u_k = np.ones((M, U)) * FU / M
+f_b_k = np.ones((M, B)) * FB / M
 mum_k = np.ones((M, U))
-#mum = np.ones((M, U))
-t_u_loc = np.zeros(M)
 
-difference = 2
-criteria = 1
-result_initial = 0
+criteria = 0.001
+pre_result = 0
 loop = 1
 
-while (loop) :
-
-    loop = 1
-    initial_result = 0
-    stable = 2
+while (loop<=100) :
 
     e_um_cost = 0
     e_tx_cost = 0
@@ -93,14 +64,14 @@ while (loop) :
 
     for m in range(M):
 
-        e_um_cost = 0
-        t_um_cost = 0
+        #e_um_cost = 0
+        #t_um_cost = 0
 
         for u in range(U):
 
-            t_tx_cost = 0
-            e_tx_cost = 0
-            t_bm_cost = 0
+            #t_tx_cost = 0
+            #e_tx_cost = 0
+            #t_bm_cost = 0
 
             for b in range(B):
 
@@ -143,22 +114,36 @@ while (loop) :
         [mum >= t_bm_cost+t_tx_cost]
 
     prob = cvx.Problem(obj, constraints)
-    result = prob.solve()
+    result = prob.solve(warm_start=True)
 
-    criteria = abs(result - initial_result)
-    initial_result = result
+    if loop % 10 == 0:
+        np.set_printoptions(precision=2)
+        print("Iteration : ", loop)
+        print("Status : ", prob.status)
+        print(rho_um.value)
+        print(rho_bm.value)
+        print(fum.value)
+        print(fbm.value)
+        #print(mum.value)
+        print(result)
 
-    rho_um_k = rho_um.value
-    rho_bm_k = rho_bm.value
-    f_u_k = fum.value
-    f_b_k = fbm.value
-    mum_k = mum.value
+    rho_um_k = lamda * rho_um.value + (1 - lamda) * rho_um_k
+    rho_bm_k = lamda * rho_bm.value + (1 - lamda) * rho_bm_k
+    f_u_k = lamda * fum.value + (1 - lamda) * f_u_k
+    f_b_k = lamda * fbm.value + (1 - lamda) * f_b_k
+    mum_k = lamda * mum.value + (1 - lamda) * mum_k
 
-    print(rho_um.value)
-    print(rho_bm.value)
-    print(fum.value)
-    print(fbm.value)
-    print(mum.value)
-    print(result)
-
+    loop += 1
+    # if loop ==1:
+    #     pre_result = float(result)
+    #     loop += 1
+    #
+    # elif loop > 1:
+    #     present_result = float(result)
+    #
+    #     if abs(present_result - pre_result) <= criteria :
+    #         loop = 0
+    #     else :
+    #         pre_result = float(result)
+    #         loop += 1
 
